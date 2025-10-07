@@ -1,0 +1,83 @@
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+
+local CoinStore = DataStoreService:GetDataStore("PlayerCoins") -- userId -> coins
+
+-- Default coin earn rates (can be changed)
+local CoinConfig = {
+    KillEnemy = 10,     -- coins per enemy
+    CollectItem = 5,    -- coins per item collected
+    CompleteQuest = 50  -- coins per quest
+}
+
+-- Function to add coins to a player
+local function AddCoins(player, amount)
+    if not player then return end
+
+    -- Update DataStore
+    pcall(function()
+        CoinStore:UpdateAsync(tostring(player.UserId), function(old)
+            return (old or 0) + amount
+        end)
+    end)
+
+    -- Update player's Coins IntValue
+    local coins = player:FindFirstChild("Coins")
+    if not coins then
+        coins = Instance.new("IntValue")
+        coins.Name = "Coins"
+        coins.Value = 0
+        coins.Parent = player
+    end
+    coins.Value = coins.Value + amount
+
+    -- Update existing GUI (assumes player already has a TextLabel for coins)
+    local gui = player:FindFirstChild("PlayerGui")
+    if gui then
+        local coinLabel = gui:FindFirstChild("CoinGui", true) -- searches descendants
+        if coinLabel and coinLabel:IsA("TextLabel") then
+            coinLabel.Text = "Coins: "..coins.Value
+        end
+    end
+end
+
+-- Load coins on join
+Players.PlayerAdded:Connect(function(player)
+    local coins = Instance.new("IntValue")
+    coins.Name = "Coins"
+    coins.Value = 0
+    coins.Parent = player
+
+    -- Load from DataStore
+    local success, storedCoins = pcall(function()
+        return CoinStore:GetAsync(tostring(player.UserId))
+    end)
+    if success and storedCoins then
+        coins.Value = storedCoins
+    end
+
+    -- Update existing GUI if present
+    local gui = player:FindFirstChild("PlayerGui")
+    if gui then
+        local coinLabel = gui:FindFirstChild("CoinGui", true)
+        if coinLabel and coinLabel:IsA("TextLabel") then
+            coinLabel.Text = "Coins: "..coins.Value
+        end
+    end
+end)
+
+-- Save coins on leave
+Players.PlayerRemoving:Connect(function(player)
+    local coins = player:FindFirstChild("Coins")
+    if coins then
+        pcall(function()
+            CoinStore:SetAsync(tostring(player.UserId), coins.Value)
+        end)
+    end
+end)
+
+-- Example usage: call AddCoins(player, CoinConfig.EventName)
+-- Replace with your game’s events:
+-- AddCoins(player, CoinConfig.KillEnemy)
+-- AddCoins(player, CoinConfig.CollectItem)
+-- AddCoins(player, CoinConfig.CompleteQuest)
